@@ -8,7 +8,8 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
 (async () => {
     const chalk = (await import('chalk')).default
     let counter = JSON.parse(await readFile('counter.json', 'utf-8'))
-
+    let isRunning = false
+    
     const data = await readFile('data.csv', 'utf-8')
     const pixData = data
         .split('\n')
@@ -60,6 +61,9 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
 
     async function run() {
         await sleep(delay + 2000)
+        if (isRunning) {
+            return console.log(chalk.red('Já está rodando'))
+        }
         const isOnPage = await page.evaluate(() => window.location.href.endsWith('rendimentos'))
         if (!isOnPage) {
             console.log(chalk.red("Não está na pagina, ignorando..."))
@@ -70,6 +74,7 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
 
         const entry = entries2024.shift()
         console.log(chalk.yellow(`Rodando para a ${firstLength - entries2024.length - 1}/${firstLength - 1} entrada`))
+        isRunning = true
 
         const [, month, _] = entry.data.split('/')
         await page.waitForSelector('i.fa-solid.fa-plus')
@@ -165,6 +170,7 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
 
         counter++
         await writeFile('counter.json', JSON.stringify(counter));
+        isRunning = false
 
         await sleep(delay + 1000)
         const finalButton = await page.$('button.br-button.primary')
