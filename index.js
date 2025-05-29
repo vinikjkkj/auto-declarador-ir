@@ -2,6 +2,7 @@ const { readFile, writeFile } = require('fs/promises')
 const puppeteer = require('puppeteer')
 
 const sleep = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms))
+const delay = 1000
 const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|Cp\s*:(\d+)-([^,]+)|(\d+)\s+(\d+)\s+([A-Z\s]+)),(\d+\.\d{2})$/;
 
 (async () => {
@@ -58,11 +59,7 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
     await page.goto('https://mir.receitafederal.gov.br')
 
     async function run() {
-        await page.evaluateOnNewDocument(() => {
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined,
-            })
-        })
+        await sleep(delay + 2000)
         const isOnPage = await page.evaluate(() => window.location.href.endsWith('rendimentos'))
         if (!isOnPage) {
             console.log(chalk.red("Não está na pagina, ignorando..."))
@@ -72,7 +69,7 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
         console.log(chalk.green("Página carregada! Iniciando preenchimento..."))
 
         const entry = entries2024.shift()
-        console.log(chalk.yellow(`Rodando para a ${firstLength - entries2024.length - 1}º entrada`))
+        console.log(chalk.yellow(`Rodando para a ${firstLength - entries2024.length - 1}/${firstLength - 1} entrada`))
 
         const [, month, _] = entry.data.split('/')
         await page.waitForSelector('i.fa-solid.fa-plus')
@@ -80,15 +77,26 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
         const parentAddButton = await childAddButton.evaluateHandle(el => el.parentElement);
         await parentAddButton.click();
         
-        await sleep(3000)
+        await page.waitForFunction(() => window.location.href.endsWith('novo'))
+
+        await sleep(delay + 2000)
         await page.waitForSelector('.ng-select-container')
         await page.evaluate(() => {
             const event = new MouseEvent('mousedown', { bubbles: true });
             document.querySelector('ng-select .ng-select-container')?.dispatchEvent(event);
         });
 
-        await sleep(3000)
-        await page.waitForSelector('.ng-dropdown-panel .ng-option');
+        await sleep(delay + 1000)
+        try {
+            await page.waitForSelector('.ng-dropdown-panel .ng-option', { timeout: 3000 });
+        } catch(e) {
+            console.log(e)
+            await page.evaluate(() => {
+                const event = new MouseEvent('mousedown', { bubbles: true });
+                document.querySelector('ng-select .ng-select-container')?.dispatchEvent(event);
+            });
+            await sleep(delay + 1000)
+        }
         await page.evaluate(() => {
             const options = Array.from(document.querySelectorAll('.ng-dropdown-panel .ng-option'));
             const desired = options[33]
@@ -102,13 +110,13 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
         const personType = (await page.$$('div.br-radio.d-inline-block.mr-5'))[1]
         await personType.click()
 
-        await sleep(3000)
+        await sleep(delay)
         await page.evaluate(() => {
             const event = new MouseEvent('mousedown', { bubbles: true });
             document.querySelectorAll('ng-select .ng-select-container')[1]?.dispatchEvent(event);
         });
 
-        await sleep(3000)
+        await sleep(delay)
         await page.evaluate((month) => {
             const options = Array.from(document.querySelectorAll('.ng-dropdown-panel .ng-option'));
             const desired = options[parseInt(month) - 1]
@@ -118,10 +126,10 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
             desired.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         }, month);
         
-        await sleep(3000)
+        await sleep(delay)
         await page.click('irpf-checkbox')
         
-        await sleep(3000)
+        await sleep(delay)
         await page.evaluate((value) => {
             const valueEl = document.querySelector('br-input[aria-label="Valor Recebido"]  input');
             valueEl.value = parseInt(value) + '00';
@@ -130,13 +138,13 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
             valueEl.dispatchEvent(new Event('change', { bubbles: true }));
         }, entry.value)
 
-        await sleep(3000)
+        await sleep(delay)
         await page.evaluate(() => {
             const event = new MouseEvent('mousedown', { bubbles: true });
             document.querySelectorAll('ng-select .ng-select-container')[2]?.dispatchEvent(event);
         });
 
-        await sleep(3000)
+        await sleep(delay)
         await page.evaluate(() => {
             const options = Array.from(document.querySelectorAll('.ng-dropdown-panel .ng-option'));
             const desired = options[134]
@@ -146,7 +154,7 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
             desired.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
 
-        await sleep(3000)
+        await sleep(delay)
         await page.evaluate((entry) => {
             const additionalEl = document.querySelector('br-textarea[aria-label="Informações Complementares"] textarea');
             additionalEl.value = `Nome da Pessoa: ${entry.name}\nData do Serviço: ${entry.data}\n${entry.accountNumber ? `Número da Conta da Pessoa: ${entry.accountNumber}` : ''}`;
@@ -158,7 +166,7 @@ const validRegExp = /^(\d{1,2}\/\d{1,2}\/\d{4}),(?:Pix recebido[:\-]\s*([^,]+)|C
         counter++
         await writeFile('counter.json', JSON.stringify(counter));
 
-        await sleep(3000)
+        await sleep(delay + 1000)
         const finalButton = await page.$('button.br-button.primary')
         await finalButton.click()
     }
